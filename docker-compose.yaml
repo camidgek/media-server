@@ -1,0 +1,204 @@
+##
+## -------------------------
+## | H T P C - D O C K E R |
+## -------------------------
+##
+## Container based media tools configuration
+##
+## Configuration items for this file are taken from the .env file
+##
+## Have docker-compose.yml and .env in the same directory to launch the stack
+
+version: '3'
+
+######################
+# SERVICES TO LAUNCH #
+######################
+
+services:
+
+    # ----------------------------------------
+    # OPENVPN
+    # Deluge Torrent Client
+    # ----------------------------------------
+    vpn:
+        container_name: vpn
+        image: dperson/openvpn-client:latest
+        cap_add:
+            - NET_ADMIN # required to modify network interfaces
+        restart: unless-stopped
+        volumes:
+            - '/dev/net:/dev/net:z' # tun device
+            - '${HTPC_DIR}/.config/vpn:/vpn' # OpenVPN configuration
+            - '/etc/localtime:/etc/localtime:ro'
+        security_opt:
+            - label:disable
+        ports:
+            - 8112:8112 # port for deluge web UI to be reachable from local network
+        command: '-r 192.168.0.0/24' # route local network traffic
+
+    # ----------------------------------------
+    # DELUGE
+    # Deluge Torrent Client
+    # ----------------------------------------
+    deluge:
+        container_name: deluge
+        image: linuxserver/deluge:latest
+        restart: unless-stopped
+        network_mode: service:vpn
+        environment:
+            - TZ=${TZ}
+            - PUID=${PUID}
+            - PGID=${PGID}
+        volumes:
+            - '${HTPC_DIR}/downloads:/downloads'
+            - '${HTPC_DIR}/.config/deluge:/config'
+            - '/etc/localtime:/etc/localtime:ro'
+
+    # ----------------------------------------
+    # JACKETT
+    # RSS/TORZNAB Feed Creator
+    # ----------------------------------------
+    jackett:
+        container_name: jackett
+        image: linuxserver/jackett:latest
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            - TZ=${TZ}
+            - PUID=${PUID}
+            - PGID=${PGID}
+        volumes:
+            - '${HTPC_DIR}/downloads/blackhole:/downloads'
+            - '${HTPC_DIR}/.config/jackett:/config'
+            - '/etc/localtime:/etc/localtime:ro'
+
+    # ----------------------------------------
+    # NZBGET
+    # Usenet Downloader
+    # ----------------------------------------
+    nzbget:
+        container_name: nzbget
+        image: linuxserver/nzbget:latest
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            - TZ=${TZ}
+            - PUID=${PUID}
+            - PGID=${PGID}
+        volumes:
+            - '${HTPC_DIR}/downloads:/downloads'
+            - '${HTPC_DIR}/.config/nzbget:/config'
+            - '/etc/localtime:/etc/localtime:ro'
+
+    # ----------------------------------------
+    # PLEX
+    # Robust Media Server
+    # ----------------------------------------
+    plex-server:
+        container_name: plex-server
+        image: plexinc/pms-docker:latest
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            - TZ=${TZ}
+        volumes:
+            - '${HTPC_DIR}/plex/Media/Movies:/data/movies'
+            - '${HTPC_DIR}/plex/Media/TV Shows:/data/tvshows'
+            - '${HTPC_DIR}/.config/plex/db:/config'
+            - '${HTPC_DIR}/.config/plex/transcode:/transcode'
+            - '/etc/localtime:/etc/localtime:ro'
+ 
+    # ----------------------------------------
+    # SONARR
+    # TV Series Management
+    # ----------------------------------------
+    sonarr:
+        container_name: sonarr
+        image: linuxserver/sonarr:latest
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            - TZ=${TZ}
+            - PUID=${PUID}
+            - PGID=${PGID}
+        volumes:
+            - '${HTPC_DIR}/downloads:/downloads'
+            - '${HTPC_DIR}/plex/Media/TV Shows:/tv'
+            - '${HTPC_DIR}/.config/sonarr:/config'
+            - '/etc/localtime:/etc/localtime:ro'
+
+    # ----------------------------------------
+    # RADARR
+    # Movie Management
+    # ----------------------------------------
+    radarr:
+        container_name: radarr
+        image: linuxserver/radarr
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            - TZ=${TZ}
+            - PUID=${PUID}
+            - PGID=${PGID}
+        volumes:
+            - '${HTPC_DIR}/downloads:/downloads'
+            - '${HTPC_DIR}/plex/Media/Movies:/movies'
+            - '${HTPC_DIR}/.config/radarr:/config'
+            - '/etc/localtime:/etc/localtime:ro'
+
+    # ----------------------------------------
+    # TAUTULLI
+    # Monitoring Service for PLEX Usage
+    # ----------------------------------------
+    plexpy:
+        image: linuxserver/tautulli
+        container_name: plexpy
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            - TZ=${TZ}
+            - PUID=${PUID}
+            - PGID=${PGID}
+        volumes:
+            - '${HTPC_DIR}/.config/plexpy:/config'
+            - '${HTPC_DIR}/.config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro'
+            - '/etc/localtime:/etc/localtime:ro'
+        depends_on:
+            - plex-server
+
+    # ----------------------------------------
+    # OMBI
+    # Request Service for Plex Content
+    # ----------------------------------------
+    ombi:
+        container_name: ombi
+        image: linuxserver/ombi
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            - TZ=${TZ}
+            - PUID=${PUID}
+            - PGID=${PGID}
+        volumes:
+            - '${HTPC_DIR}/.config/ombi:/config'
+            - '/etc/localtime:/etc/localtime:ro'
+
+    # ----------------------------------------
+    # PORTAINER
+    # Docker Container Management
+    # ----------------------------------------
+    portainer:
+        container_name: portainer
+        image: portainer/portainer:latest
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            - TZ=${TZ}
+            - PUID=${PUID}
+            - PGID=${PGID}
+        volumes:
+            - '${HTPC_DIR}/.portainer:/data'
+            - '/var/run/docker.sock:/var/run/docker.sock'
+            - '/etc/localtime:/etc/localtime:ro'
+
